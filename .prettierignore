@@ -1,0 +1,7 @@
+node_modules
+dist
+coverage
+package-lock.json
+BUILD_README.md
+powershell.cmd
+powershell.bat
