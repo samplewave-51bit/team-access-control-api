@@ -1,0 +1,91 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: tac-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: tac
+      POSTGRES_PASSWORD: tac
+      POSTGRES_DB: tac
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U tac -d tac']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: tac-redis
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    container_name: tac-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - '9000:9000'
+      - '9001:9001'
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test:
+        ['CMD-SHELL', 'mc ready local || curl -f http://localhost:9000/minio/health/live || exit 1']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: tac-mailpit
+    restart: unless-stopped
+    ports:
+      - '1025:1025'
+      - '8025:8025'
+    volumes:
+      - mailpit_data:/data
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -q --spider http://localhost:8025/api/v1/info || exit 1']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  init-services:
+    image: minio/mc:latest
+    container_name: tac-init-services
+    depends_on:
+      minio:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      /usr/bin/mc alias set local http://minio:9000 minioadmin minioadmin;
+      /usr/bin/mc mb --ignore-existing local/tac-files;
+      echo 'MinIO bucket tac-files verified/created.';
+      exit 0;
+      "
+    restart: 'no'
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:
+  mailpit_data:
