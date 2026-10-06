@@ -348,7 +348,7 @@ Total: **33 commits** over 14 days.
 
 | Day | Date | Commits | CI | Notes / blockers |
 |---|---|---|---|---|
-| 1 | | | | |
+| 1 | 2026-10-06 | 3 (C1–C3) | Local passed | Foundation complete: TypeScript, tooling, docker-compose, env validation, express skeleton, health & error handling. |
 | 2 | | | | |
 | 3 | | | | |
 | 4 | | | | |
