@@ -1,0 +1,197 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id               String       @id @default(uuid())
+  email            String       @unique
+  passwordHash     String
+  name             String
+  isActive         Boolean      @default(true)
+  failedLoginCount Int          @default(0)
+  lockedUntil      DateTime?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  createdOrgs      Organization[] @relation("OrgCreator")
+  memberships      Membership[]
+  sentInvitations  Invitation[]   @relation("InvitedBy")
+  sessions         Session[]
+  files            File[]
+  auditLogs        AuditLog[]
+
+  @@index([email])
+}
+
+model Organization {
+  id          String       @id @default(uuid())
+  name        String
+  slug        String       @unique
+  createdById String
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  createdBy   User         @relation("OrgCreator", fields: [createdById], references: [id])
+  memberships Membership[]
+  roles       Role[]
+  invitations Invitation[]
+  files       File[]
+  auditLogs   AuditLog[]
+
+  @@index([createdById])
+  @@index([slug])
+}
+
+model Membership {
+  id        String       @id @default(uuid())
+  userId    String
+  orgId     String
+  roleId    String
+  status    String       @default("ACTIVE")
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  org       Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  role      Role         @relation(fields: [roleId], references: [id])
+
+  @@unique([userId, orgId])
+  @@index([userId])
+  @@index([orgId])
+  @@index([roleId])
+}
+
+model Role {
+  id        String           @id @default(uuid())
+  orgId     String
+  name      String
+  priority  Int
+  isSystem  Boolean          @default(false)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  org             Organization     @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  memberships     Membership[]
+  rolePermissions RolePermission[]
+  invitations     Invitation[]
+
+  @@unique([orgId, name])
+  @@index([orgId])
+  @@index([priority])
+}
+
+model Permission {
+  id          String           @id @default(uuid())
+  key         String           @unique
+  description String
+  createdAt   DateTime         @default(now())
+
+  rolePermissions RolePermission[]
+
+  @@index([key])
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  assignedAt   DateTime   @default(now())
+
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@index([roleId])
+  @@index([permissionId])
+}
+
+model Invitation {
+  id          String       @id @default(uuid())
+  orgId       String
+  email       String
+  roleId      String
+  tokenHash   String       @unique
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  revokedAt   DateTime?
+  invitedById String
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  org         Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  role        Role         @relation(fields: [roleId], references: [id])
+  invitedBy   User         @relation("InvitedBy", fields: [invitedById], references: [id])
+
+  @@index([orgId])
+  @@index([email])
+  @@index([roleId])
+  @@index([invitedById])
+  @@index([tokenHash])
+}
+
+model Session {
+  id               String    @id @default(uuid())
+  userId           String
+  familyId         String
+  refreshTokenHash String    @unique
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  replacedById     String?
+  userAgent        String?
+  ip               String?
+  lastUsedAt       DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([familyId])
+  @@index([refreshTokenHash])
+}
+
+model AuditLog {
+  id         String        @id @default(uuid())
+  orgId      String?
+  actorId    String?
+  action     String
+  targetType String
+  targetId   String?
+  metadata   Json?
+  ip         String?
+  createdAt  DateTime      @default(now())
+
+  org        Organization? @relation(fields: [orgId], references: [id], onDelete: SetNull)
+  actor      User?         @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([orgId, createdAt(sort: Desc)])
+  @@index([actorId])
+  @@index([action])
+}
+
+model File {
+  id           String       @id @default(uuid())
+  orgId        String
+  uploadedById String
+  storageKey   String       @unique
+  originalName String
+  mimeType     String
+  sizeBytes    BigInt
+  sha256       String
+  status       String       @default("PENDING_SCAN")
+  deletedAt    DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  org          Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  uploadedBy   User         @relation(fields: [uploadedById], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+  @@index([uploadedById])
+  @@index([status])
+  @@index([deletedAt])
+}
