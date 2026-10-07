@@ -30,9 +30,33 @@ export const registerBodySchema = z
     },
   );
 
+export const loginBodySchema = z
+  .object({
+    email: z
+      .string()
+      .email('Invalid email address')
+      .transform((val) => val.trim().toLowerCase())
+      .openapi({ example: 'user@example.com' }),
+    password: z.string().min(1, 'Password is required').openapi({ example: 'P@ssword1234!' }),
+  })
+  .strict();
+
 export const userResponseSchema = registry.register(
   'UserResponse',
   z.object({
+    user: z.object({
+      id: z.string().uuid().openapi({ example: '123e4567-e89b-12d3-a456-426614174000' }),
+      email: z.string().email().openapi({ example: 'user@example.com' }),
+      name: z.string().openapi({ example: 'John Doe' }),
+      createdAt: z.string().datetime().openapi({ example: '2026-10-07T12:00:00.000Z' }),
+    }),
+  }),
+);
+
+export const loginResponseSchema = registry.register(
+  'LoginResponse',
+  z.object({
+    accessToken: z.string().openapi({ example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' }),
     user: z.object({
       id: z.string().uuid().openapi({ example: '123e4567-e89b-12d3-a456-426614174000' }),
       email: z.string().email().openapi({ example: 'user@example.com' }),
@@ -46,7 +70,12 @@ export const registerSchema = {
   body: registerBodySchema,
 };
 
+export const loginSchema = {
+  body: loginBodySchema,
+};
+
 export type RegisterInput = z.infer<typeof registerBodySchema>;
+export type LoginInput = z.infer<typeof loginBodySchema>;
 
 // Register endpoint with OpenAPI
 registry.registerPath({
@@ -74,7 +103,7 @@ registry.registerPath({
       },
     },
     400: {
-      description: 'Validation error (e.g., password too short or equals email)',
+      description: 'Validation error',
       content: {
         'application/json': {
           schema: errorResponseSchema,
@@ -83,6 +112,82 @@ registry.registerPath({
     },
     409: {
       description: 'Conflict - Email is already registered',
+      content: {
+        'application/json': {
+          schema: errorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/auth/login',
+  summary: 'Log in to an existing account',
+  description: 'Authenticates user credentials, creates a session, and issues tokens.',
+  tags: ['Auth'],
+  request: {
+    body: {
+      content: {
+        'application/json': {
+          schema: loginBodySchema,
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: 'User authenticated successfully',
+      headers: {
+        'Set-Cookie': {
+          description: 'httpOnly refresh token cookie',
+          schema: { type: 'string' },
+        },
+      },
+      content: {
+        'application/json': {
+          schema: loginResponseSchema,
+        },
+      },
+    },
+    400: {
+      description: 'Validation error',
+      content: {
+        'application/json': {
+          schema: errorResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: 'Unauthorized - Invalid credentials or account locked',
+      content: {
+        'application/json': {
+          schema: errorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/auth/me',
+  summary: 'Get current authenticated user',
+  description: 'Returns profile details for the authenticated user.',
+  tags: ['Auth'],
+  security: [{ bearerAuth: [] }],
+  responses: {
+    200: {
+      description: 'Current user profile',
+      content: {
+        'application/json': {
+          schema: userResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: 'Unauthorized - Missing, invalid or expired token',
       content: {
         'application/json': {
           schema: errorResponseSchema,

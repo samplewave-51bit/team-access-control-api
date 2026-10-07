@@ -1,3 +1,4 @@
+import cookieParser from 'cookie-parser';
 import express, { Express, Request, Response } from 'express';
 import pinoHttp from 'pino-http';
 import swaggerUi from 'swagger-ui-express';
@@ -15,6 +16,7 @@ export function createApp(): Express {
   app.disable('x-powered-by');
   app.use(express.json({ limit: '100kb' }));
   app.use(express.urlencoded({ extended: true }));
+  app.use(cookieParser());
 
   // Request ID middleware
   app.use(requestIdMiddleware);

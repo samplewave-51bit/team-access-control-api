@@ -349,7 +349,7 @@ Total: **33 commits** over 14 days.
 | Day | Date | Commits | CI | Notes / blockers |
 |---|---|---|---|---|
 | 1 | 2026-10-06 | 3 (C1–C3) | Local passed | Foundation complete: TypeScript, tooling, docker-compose, env validation, express skeleton, health & error handling. |
-| 2 | | | | |
+| 2 | 2026-10-07 | 3 (C4–C6) | Local passed | Data model & Auth core: Prisma schema, migration, seed, registration with argon2id, login, session storage, lockout, JWT, Swagger. |
 | 3 | | | | |
 | 4 | | | | |
 | 5 | | | | |
