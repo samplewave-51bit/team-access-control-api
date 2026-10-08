@@ -9,6 +9,7 @@ import { requestIdMiddleware } from './middleware/requestId';
 import { authRouter } from './modules/auth/auth.routes';
 import { healthRouter } from './modules/health/health.routes';
 import { orgsRouter } from './modules/orgs/orgs.routes';
+import { permissionsRouter } from './modules/permissions/permissions.routes';
 
 export function createApp(): Express {
   const app = express();
@@ -47,6 +48,7 @@ export function createApp(): Express {
   app.use('/api/v1', healthRouter);
   app.use('/api/v1/auth', authRouter);
   app.use('/api/v1/orgs', orgsRouter);
+  app.use('/api/v1/permissions', permissionsRouter);
 
   // 404 handler
   app.use(notFoundHandler);
