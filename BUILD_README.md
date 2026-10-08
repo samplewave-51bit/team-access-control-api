@@ -311,6 +311,196 @@ Total: **33 commits** over 14 days.
 
 ---
 
+### DAY 2 — Data model + Auth core (branch `day-02-auth-core`)
+
+**C4** `feat(db): add full prisma schema, initial migration and permission seed`
+- Entire §3 schema, indexes, migration, `seed.ts` that upserts the permission catalog.
+- `lib/prisma.ts` singleton; test helper that truncates all tables between tests.
+
+**C5** `feat(auth): registration with argon2id and zod validation; openapi + swagger setup`
+- `validate()` middleware; OpenAPI registry + `/docs` + `/docs/openapi.json`.
+- `POST /auth/register` (email uniqueness → 409, password policy). Registered in OpenAPI. Tests: success, duplicate, weak password, extra fields rejected.
+
+**C6** `feat(auth): login with access jwt and hashed refresh-token sessions`
+- `POST /auth/login`, `GET /auth/me`, `authenticate` middleware, lockout after 5 failures.
+- Session row created with hashed refresh token; cookie set per §5. Tests: success, wrong password, lockout, expired/invalid token.
+
+**Responsibility check:** (1) login + session storage, (3) schema + indexes, (6) Zod everywhere, (7) Swagger live.
+
+---
+
+### DAY 3 — Refresh, Orgs, RBAC base, CI (branch `day-03-orgs-rbac-base`)
+
+**C7** `feat(auth): refresh token rotation with reuse detection, logout and logout-all`
+- `/auth/refresh`, `/auth/logout`, `/auth/logout-all`; family revocation on reuse; Redis `revoked:sid` key written on logout.
+- Tests: rotation works, old token rejected, **reuse revokes whole family**, logout invalidates access token immediately.
+
+**C8** `feat(orgs): create organization in a single transaction with system roles`
+- `POST /orgs` creates org + 4 system roles + role permissions + owner membership **atomically** (Prisma `$transaction`); `GET /orgs`, `GET /orgs/:orgId`, `PATCH /orgs/:orgId`.
+- Slug generation with collision handling. Tests: transaction rollback when a step fails (simulate), non-member gets 404.
+
+**C9** `feat(rbac): permission middleware and members listing`
+- `requirePermission(key | [keys])` loads membership+permissions from DB, org-scoped, returns 404 for non-members and 403 for missing permission.
+- `GET /orgs/:orgId/members` (cursor pagination), `GET /permissions`.
+- Tests: owner/admin/member/viewer matrix on these endpoints.
+
+**C10** `ci: add github actions workflow; docs: project README with architecture and setup`
+- `.github/workflows/ci.yml` (lint, build, migrate, test with Postgres + Redis services). Badge in README.
+- Public `README.md`: overview, feature list, tech stack, quick start, "Status & roadmap" checklist, link to `/docs`.
+
+**Responsibility check:** (1) refresh rotation + reuse detection ✔, (2) org-scoped permission checks ✔, (3) first real transaction ✔, (7) CI green ✔. **→ Resume-ready snapshot. Tag `v0.1.0`.**
+
+---
+
+### DAY 4 — RBAC deep (branch `day-04-rbac`)
+
+**C11** `feat(roles): custom role CRUD with permission assignment`
+- Endpoints per §4. Enforce §3 rules 3 & 5 (no editing system roles, no privilege escalation, cannot delete a role that has members → 409).
+- Tests: escalation attempts rejected, duplicate names, invalid permission keys.
+
+**C12** `feat(members): change member role and remove member with hierarchy and last-owner rules`
+- `PATCH …/members/:userId/role`, `DELETE …/members/:userId` inside transactions with row locking on the org's owner count (`SELECT … FOR UPDATE` via `$queryRaw` or serializable isolation).
+- Tests: cannot demote higher/equal role, last owner protected, concurrent demotion race test.
+
+**Responsibility check:** (2) hierarchy + scoped rules ✔, (3) transactions with locking ✔.
+
+---
+
+### DAY 5 — Invitations + Audit logs (branch `day-05-invites-audit`)
+
+**C13** `feat(invitations): create, list, revoke and accept invitations`
+- Token = 32 random bytes, stored as SHA-256 hash, expires in 7 days. Create response includes a one-time `inviteUrl` (`APP_URL/accept-invite?token=…`) — kept permanently as a "copy link" feature.
+- `POST /invitations/accept` requires the logged-in user's email to match; creates membership + marks accepted **in one transaction**; token single-use.
+- Tests: expired, revoked, wrong email, reused token, duplicate pending invite → 409.
+
+**C14** `feat(audit): append-only audit log service and query endpoint`
+- `lib/audit.ts` `recordAudit(tx, event)` — always called **inside the same transaction** as the change it describes. Wire into: org create/update, member role change/remove, role CRUD, invitation create/revoke/accept, login success/failure (org-less), logout-all.
+- `GET /orgs/:orgId/audit-logs` with filters (`action`, `actorId`, `from`, `to`) + cursor pagination.
+- Tests: audit row exists for each action; rollback also removes audit row; non-permitted user blocked.
+
+**Responsibility check:** (3) audit-in-transaction ✔, (2) `audit:read` scope ✔.
+
+---
+
+### DAY 6 — Sessions + Rate limiting (branch `day-06-sessions-ratelimit`)
+
+**C15** `feat(sessions): list and revoke own sessions; admin revoke of member sessions`
+- `GET /sessions`, `DELETE /sessions/:id`, `POST …/members/:userId/revoke-sessions` (requires `session:revoke` + hierarchy). Revocation writes Redis `revoked:sid:*` and audit log.
+- Tests: revoked session's access token fails immediately; cannot revoke another user's session via own-session endpoint.
+
+**C16** `feat(security): redis-backed rate limiting for global, auth and per-user limits`
+- Limits from §5, `Retry-After` + RateLimit headers; limiter keys namespaced; limiter tests use a separate Redis DB index (`/1`) and are flushed between tests.
+- Tests: login brute force → 429; headers present; limits reset after window (use short test window via config).
+
+**Responsibility check:** (1) instant revocation ✔, (6) rate limiting ✔.
+
+---
+
+### DAY 7 — DEPLOY v1 (branch `day-07-deploy`)
+
+**C17** `build: multi-stage dockerfile, production config and migration-on-release`
+- `Dockerfile` (`node:22-slim`, install `openssl`, `npm ci`, `prisma generate`, build, run as non-root, `HEALTHCHECK`). `npm run start:prod`. Migrations run via `prisma migrate deploy` as the release/pre-deploy command, **never** `migrate dev`.
+- Trust-proxy configured (`app.set('trust proxy', 1)`) so rate limiting sees real IPs; `COOKIE_SECURE=true` in prod.
+
+**C18** `docs: deploy v1 to railway with live swagger and smoke tests`
+- Railway project: web service, Postgres, Redis. Set env vars. Add `scripts/smoke.sh` (register → login → create org → list members) run against the live URL.
+- README: live URL, Swagger URL, deployment section, `/api/v1/health` badge or note.
+- Tag `v0.2.0`.
+
+**Responsibility check:** Deployed ✔, docs publicly reachable ✔. *(File storage/worker not yet deployed — that is intentional.)*
+
+---
+
+### DAY 8 — Storage + Upload (branch `day-08-uploads`)
+
+**C19** `feat(storage): s3-compatible storage provider with minio and bucket bootstrap`
+- `lib/storage.ts` interface `{ put, getSignedUrl, delete, exists }` implemented with `@aws-sdk/client-s3` (+ `@aws-sdk/s3-request-presigner`). Integration test against local MinIO.
+
+**C20** `feat(files): secure multipart upload with type, size and magic-byte validation`
+- `POST /orgs/:orgId/files`; rules from §5; file row `PENDING_SCAN`; quota check in transaction; audit log.
+- Tests: oversize → 413; spoofed MIME (exe renamed `.png`) → 415; double extension (`a.php.png`); path traversal filename (`../../x`); empty file; wrong field name; unauthenticated.
+
+**Responsibility check:** (4) validation + safe keys ✔.
+
+---
+
+### DAY 9 — Files access (branch `day-09-files-access`)
+
+**C21** `feat(files): list, get, signed download and soft delete with own/any scopes`
+- Scoping from §3 rule 2; download blocked unless `CLEAN`; signed URL 60 s; cross-org access → 404.
+- Tests: member sees only own, admin sees all, viewer cannot upload, cross-org isolation.
+
+**C22** `feat(files): per-org quota and storage-safety hardening tests`
+- Quota enforcement under concurrency (transactional check), headers (`nosniff`, attachment), bucket never publicly accessible (documented + test that raw key URL is not usable without signature).
+
+**Responsibility check:** (4) signed URLs, private bucket, scoping ✔, (2) own/any scope ✔.
+
+---
+
+### DAY 10 — Queues + Worker (branch `day-10-queues`)
+
+**C23** `feat(queue): bullmq infrastructure, worker entrypoint and invitation email job`
+- `queues/` definitions + producers; `src/worker.ts`; `send-invitation-email` with Nodemailer → Mailpit; retries/backoff per §6; invitation creation enqueues the job **after** the DB transaction commits.
+- Tests: processor unit test with mocked mailer; retry test (fail twice then succeed); producer enqueues exactly once.
+
+**C24** `feat(queue): file scan job with idempotent status transitions`
+- Upload enqueues `scan-file`; worker streams object, recomputes SHA-256, checks EICAR test string → `INFECTED`, else `CLEAN`; failure after retries → `FAILED`. Re-running the job is harmless.
+- Tests: clean file, EICAR file, hash mismatch → `FAILED`, idempotency.
+
+**Responsibility check:** (5) queues, worker, retries, idempotency ✔.
+
+---
+
+### DAY 11 — Maintenance jobs + Worker deploy (branch `day-11-maintenance`)
+
+**C25** `feat(queue): scheduled maintenance jobs for sessions, invitations and deleted files`
+- Repeatable jobs per §6, graceful worker shutdown, `/health/ready` extended with queue connectivity. Tests with fake clocks where possible.
+
+**C26** `build: deploy worker service and r2 storage; update smoke tests and docs`
+- Second Railway service from same image (`npm run start:worker`). Create Cloudflare R2 bucket + API token, set `S3_*` env vars (`S3_FORCE_PATH_STYLE=false`). SMTP provider creds in env.
+- Extend `scripts/smoke.sh`: upload → wait for `CLEAN` → signed download. Tag `v0.3.0`.
+
+**Responsibility check:** (5) worker live in production ✔, (4) production storage ✔.
+
+---
+
+### DAY 12 — Hardening (branch `day-12-hardening`)
+
+**C27** `feat(security): helmet, cors allowlist, body limits and consistent error mapping`
+- `helmet`, CORS allowlist from env, JSON limit, map Prisma errors (P2002 → 409, P2025 → 404) and Zod errors to the standard shape; never leak stack traces in prod; sensitive fields (password, tokens) redacted in logs.
+
+**C28** `test(rbac): table-driven authorization matrix across all endpoints and roles`
+- A test that iterates **every protected route × {owner, admin, member, viewer, non-member, anonymous}** and asserts the expected status. Includes cross-org tenant-isolation checks.
+
+**Responsibility check:** (2) full RBAC matrix ✔, (6) validation/error mapping ✔.
+
+---
+
+### DAY 13 — Docs + Coverage (branch `day-13-docs-coverage`)
+
+**C29** `test: raise coverage to 80%+ and enforce threshold in CI`
+- Jest `coverageThreshold` (80% lines/branches/functions/statements), fill gaps, add a test asserting **every Express route is present in the OpenAPI document**.
+
+**C30** `docs: erd, architecture overview, decisions log and postman collection`
+- `docs/ERD.md` (Mermaid ER diagram), `docs/ARCHITECTURE.md` (request flow, token lifecycle sequence diagram, queue flow), `docs/DECISIONS.md` (why Argon2id, why opaque refresh tokens, why BullMQ, why signed URLs), Postman collection exported from OpenAPI.
+
+**Responsibility check:** (7) docs + tests complete ✔.
+
+---
+
+### DAY 14 — Release (branch `day-14-release`)
+
+**C31** `feat(seed): demo seed data and demo walkthrough`
+- `npm run db:seed:demo` creates: 1 org, 4 users (one per role), sample files, sample audit history. `docs/DEMO.md` with a 5-minute curl/Swagger walkthrough and demo credentials (demo env only).
+
+**C32** `docs: final README with screenshots, live links and release notes`
+- Final public README: architecture diagram, feature table mapping to the 7 responsibilities, security design summary, test/coverage badge, live URLs, "What I'd do next".
+- Redeploy, run smoke test, tag **`v1.0.0`**, create GitHub Release.
+
+> **C33** (optional buffer commit, only if needed): `chore: fix issues found during final smoke test`.
+
+---
+
 ## 11. Known Pitfalls — Pre-decided Fixes (so nothing "suddenly" breaks)
 
 | Problem | Fix |
@@ -350,7 +540,7 @@ Total: **33 commits** over 14 days.
 |---|---|---|---|---|
 | 1 | 2026-10-06 | 3 (C1–C3) | Local passed | Foundation complete: TypeScript, tooling, docker-compose, env validation, express skeleton, health & error handling. |
 | 2 | 2026-10-07 | 3 (C4–C6) | Local passed | Data model & Auth core: Prisma schema, migration, seed, registration with argon2id, login, session storage, lockout, JWT, Swagger. |
-| 3 | | | | |
+| 3 | 2026-10-08 | 4 (C7–C10) | Local passed | Resume-ready snapshot (v0.1.0): refresh rotation, reuse detection, logout, orgs transaction, RBAC middleware, members listing, GitHub Actions CI, public README. |
 | 4 | | | | |
 | 5 | | | | |
 | 6 | | | | |
