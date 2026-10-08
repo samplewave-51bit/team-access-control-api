@@ -2,6 +2,7 @@ import { Session, User } from '@prisma/client';
 import { NextFunction, Request, Response } from 'express';
 import { UnauthorizedError } from '../lib/errors';
 import { prisma } from '../lib/prisma';
+import { isSessionIdRevoked } from '../lib/redis';
 import { verifyAccessToken } from '../lib/tokens';
 
 declare global {
@@ -32,7 +33,13 @@ export async function authenticate(
 
     const payload = verifyAccessToken(token);
 
-    // Verify session existence and validity in database
+    // 1. Instant revocation check via Redis
+    const isRevoked = await isSessionIdRevoked(payload.sid);
+    if (isRevoked) {
+      throw new UnauthorizedError('Session has expired or been revoked');
+    }
+
+    // 2. Verify session existence and validity in database
     const session = await prisma.session.findUnique({
       where: { id: payload.sid },
     });
@@ -41,7 +48,7 @@ export async function authenticate(
       throw new UnauthorizedError('Session has expired or been revoked');
     }
 
-    // Verify user status
+    // 3. Verify user status
     const user = await prisma.user.findUnique({
       where: { id: payload.sub },
     });

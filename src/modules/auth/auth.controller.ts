@@ -29,6 +29,47 @@ export class AuthController {
     });
   }
 
+  async refresh(req: Request, res: Response): Promise<void> {
+    const rawRefreshToken = req.cookies?.refreshToken;
+
+    const result = await authService.refresh(rawRefreshToken, {
+      userAgent: req.header('user-agent'),
+      ip: req.ip,
+    });
+
+    res.cookie('refreshToken', result.refreshToken, {
+      httpOnly: true,
+      secure: env.COOKIE_SECURE,
+      sameSite: 'strict',
+      path: '/api/v1/auth',
+      maxAge: env.REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000,
+    });
+
+    res.status(200).json({
+      accessToken: result.accessToken,
+    });
+  }
+
+  async logout(req: Request, res: Response): Promise<void> {
+    const sessionId = req.session!.id;
+    await authService.logout(sessionId);
+
+    res.clearCookie('refreshToken', { path: '/api/v1/auth' });
+    res.status(200).json({
+      message: 'Logged out successfully',
+    });
+  }
+
+  async logoutAll(req: Request, res: Response): Promise<void> {
+    const userId = req.user!.id;
+    await authService.logoutAll(userId);
+
+    res.clearCookie('refreshToken', { path: '/api/v1/auth' });
+    res.status(200).json({
+      message: 'Logged out from all devices successfully',
+    });
+  }
+
   async me(req: Request, res: Response): Promise<void> {
     const user = req.user!;
     res.status(200).json({

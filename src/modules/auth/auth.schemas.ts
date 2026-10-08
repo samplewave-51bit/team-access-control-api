@@ -66,6 +66,20 @@ export const loginResponseSchema = registry.register(
   }),
 );
 
+export const refreshResponseSchema = registry.register(
+  'RefreshResponse',
+  z.object({
+    accessToken: z.string().openapi({ example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' }),
+  }),
+);
+
+export const messageResponseSchema = registry.register(
+  'MessageResponse',
+  z.object({
+    message: z.string().openapi({ example: 'Operation completed successfully' }),
+  }),
+);
+
 export const registerSchema = {
   body: registerBodySchema,
 };
@@ -161,6 +175,87 @@ registry.registerPath({
     },
     401: {
       description: 'Unauthorized - Invalid credentials or account locked',
+      content: {
+        'application/json': {
+          schema: errorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/auth/refresh',
+  summary: 'Rotate refresh token and get a new access token',
+  description:
+    'Consumes the current refresh token cookie and issues a new access token and rotated refresh cookie.',
+  tags: ['Auth'],
+  responses: {
+    200: {
+      description: 'Token refreshed successfully',
+      content: {
+        'application/json': {
+          schema: refreshResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: 'Unauthorized - Invalid, expired or reused refresh token',
+      content: {
+        'application/json': {
+          schema: errorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/auth/logout',
+  summary: 'Log out current session',
+  description: 'Revokes the current session and invalidates its access token.',
+  tags: ['Auth'],
+  security: [{ bearerAuth: [] }],
+  responses: {
+    200: {
+      description: 'Logged out successfully',
+      content: {
+        'application/json': {
+          schema: messageResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: 'Unauthorized',
+      content: {
+        'application/json': {
+          schema: errorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/auth/logout-all',
+  summary: 'Log out all sessions',
+  description: 'Revokes all active sessions for the user across all devices.',
+  tags: ['Auth'],
+  security: [{ bearerAuth: [] }],
+  responses: {
+    200: {
+      description: 'Logged out from all devices successfully',
+      content: {
+        'application/json': {
+          schema: messageResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: 'Unauthorized',
       content: {
         'application/json': {
           schema: errorResponseSchema,

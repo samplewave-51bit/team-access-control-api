@@ -2,7 +2,8 @@ import { randomUUID } from 'crypto';
 import { ConflictError, UnauthorizedError } from '../../lib/errors';
 import { hashPassword, verifyPassword } from '../../lib/hashing';
 import { prisma } from '../../lib/prisma';
-import { generateAccessToken, generateRefreshToken } from '../../lib/tokens';
+import { revokeSessionId } from '../../lib/redis';
+import { generateAccessToken, generateRefreshToken, hashToken } from '../../lib/tokens';
 import { LoginInput, RegisterInput } from './auth.schemas';
 
 export interface SessionMetadata {
@@ -111,6 +112,117 @@ export class AuthService {
       accessToken,
       refreshToken: rawRefreshToken,
     };
+  }
+
+  async refresh(rawRefreshToken: string, meta: SessionMetadata) {
+    if (!rawRefreshToken || typeof rawRefreshToken !== 'string') {
+      throw new UnauthorizedError('Refresh token required');
+    }
+
+    const tokenHash = hashToken(rawRefreshToken);
+
+    const session = await prisma.session.findUnique({
+      where: { refreshTokenHash: tokenHash },
+    });
+
+    if (!session) {
+      throw new UnauthorizedError('Invalid refresh token');
+    }
+
+    // Check if token was already revoked (Reuse Detection)
+    if (session.revokedAt !== null) {
+      // Grace window check per §11: rotated within last 10s and replacement session exists
+      const gracePeriodMs = 10000;
+      const rotatedRecently = Date.now() - session.revokedAt.getTime() < gracePeriodMs;
+
+      if (rotatedRecently && session.replacedById) {
+        throw new UnauthorizedError('Refresh token was already rotated');
+      }
+
+      // Reuse detected outside grace window: revoke ENTIRE family!
+      const activeFamilySessions = await prisma.session.findMany({
+        where: { familyId: session.familyId, revokedAt: null },
+      });
+
+      await prisma.session.updateMany({
+        where: { familyId: session.familyId },
+        data: { revokedAt: new Date() },
+      });
+
+      for (const s of activeFamilySessions) {
+        await revokeSessionId(s.id);
+      }
+
+      throw new UnauthorizedError(
+        'Refresh token reuse detected. All sessions in this family have been revoked.',
+      );
+    }
+
+    // Check expiration
+    if (session.expiresAt <= new Date()) {
+      throw new UnauthorizedError('Refresh token has expired');
+    }
+
+    // Rotate: generate new token and replace session in same family
+    const { token: newRawRefreshToken, hash: newHash } = generateRefreshToken();
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+    const [newSession] = await prisma.$transaction([
+      prisma.session.create({
+        data: {
+          userId: session.userId,
+          familyId: session.familyId,
+          refreshTokenHash: newHash,
+          expiresAt,
+          userAgent: meta.userAgent,
+          ip: meta.ip,
+          lastUsedAt: new Date(),
+        },
+      }),
+      prisma.session.update({
+        where: { id: session.id },
+        data: {
+          revokedAt: new Date(),
+        },
+      }),
+    ]);
+
+    await prisma.session.update({
+      where: { id: session.id },
+      data: { replacedById: newSession.id },
+    });
+
+    const accessToken = generateAccessToken(session.userId, newSession.id);
+
+    return {
+      accessToken,
+      refreshToken: newRawRefreshToken,
+    };
+  }
+
+  async logout(sessionId: string) {
+    await prisma.session.updateMany({
+      where: { id: sessionId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+
+    await revokeSessionId(sessionId);
+  }
+
+  async logoutAll(userId: string) {
+    const activeSessions = await prisma.session.findMany({
+      where: { userId, revokedAt: null },
+      select: { id: true },
+    });
+
+    await prisma.session.updateMany({
+      where: { userId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+
+    for (const session of activeSessions) {
+      await revokeSessionId(session.id);
+    }
   }
 }
 
