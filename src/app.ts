@@ -1,9 +1,15 @@
-import express, { Express } from 'express';
+import cookieParser from 'cookie-parser';
+import express, { Express, Request, Response } from 'express';
 import pinoHttp from 'pino-http';
+import swaggerUi from 'swagger-ui-express';
+import { getOpenApiDocumentation } from './docs/openapi';
 import { logger } from './lib/logger';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 import { requestIdMiddleware } from './middleware/requestId';
+import { authRouter } from './modules/auth/auth.routes';
 import { healthRouter } from './modules/health/health.routes';
+import { orgsRouter } from './modules/orgs/orgs.routes';
+import { permissionsRouter } from './modules/permissions/permissions.routes';
 
 export function createApp(): Express {
   const app = express();
@@ -12,6 +18,7 @@ export function createApp(): Express {
   app.disable('x-powered-by');
   app.use(express.json({ limit: '100kb' }));
   app.use(express.urlencoded({ extended: true }));
+  app.use(cookieParser());
 
   // Request ID middleware
   app.use(requestIdMiddleware);
@@ -30,8 +37,18 @@ export function createApp(): Express {
     }),
   );
 
+  // Swagger and OpenAPI Documentation
+  const openApiDoc = getOpenApiDocumentation();
+  app.get('/docs/openapi.json', (_req: Request, res: Response) => {
+    res.status(200).json(openApiDoc);
+  });
+  app.use('/docs', swaggerUi.serve, swaggerUi.setup(openApiDoc));
+
   // API Routes
   app.use('/api/v1', healthRouter);
+  app.use('/api/v1/auth', authRouter);
+  app.use('/api/v1/orgs', orgsRouter);
+  app.use('/api/v1/permissions', permissionsRouter);
 
   // 404 handler
   app.use(notFoundHandler);

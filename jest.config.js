@@ -4,6 +4,7 @@ module.exports = {
   testEnvironment: 'node',
   roots: ['<rootDir>/tests'],
   testMatch: ['**/*.test.ts'],
+  maxWorkers: 1,
   transform: {
     '^.+\\.tsx?$': [
       'ts-jest',

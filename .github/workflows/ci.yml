@@ -1,0 +1,92 @@
+name: CI
+
+on:
+  push:
+    branches: [main, 'day-*']
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Lint, Build & Test
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: tac
+          POSTGRES_PASSWORD: tac
+          POSTGRES_DB: tac
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22 LTS
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run linter
+        run: npm run lint
+
+      - name: Build TypeScript
+        run: npm run build
+
+      - name: Run Prisma migrations
+        env:
+          DATABASE_URL: postgresql://tac:tac@localhost:5432/tac
+        run: npx prisma migrate deploy
+
+      - name: Seed permissions
+        env:
+          DATABASE_URL: postgresql://tac:tac@localhost:5432/tac
+        run: npx tsx prisma/seed.ts
+
+      - name: Run tests
+        env:
+          NODE_ENV: test
+          PORT: 3000
+          DATABASE_URL: postgresql://tac:tac@localhost:5432/tac
+          TEST_DATABASE_URL: postgresql://tac:tac@localhost:5432/tac
+          REDIS_URL: redis://localhost:6379
+          JWT_ACCESS_SECRET: change-me-min-32-bytes-long-xxxxxxxx
+          ACCESS_TOKEN_TTL: 15m
+          REFRESH_TOKEN_TTL_DAYS: 7
+          COOKIE_SECURE: false
+          CORS_ORIGINS: http://localhost:3000
+          S3_ENDPOINT: http://localhost:9000
+          S3_REGION: auto
+          S3_BUCKET: tac-files
+          S3_ACCESS_KEY: minioadmin
+          S3_SECRET_KEY: minioadmin
+          S3_FORCE_PATH_STYLE: true
+          SMTP_HOST: localhost
+          SMTP_PORT: 1025
+          SMTP_USER: ''
+          SMTP_PASS: ''
+          MAIL_FROM: no-reply@tac.local
+          APP_URL: http://localhost:3000
+        run: npm test
