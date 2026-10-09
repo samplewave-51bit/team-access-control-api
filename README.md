@@ -100,21 +100,27 @@ Once the server is running, explore the interactive Swagger documentation:
 
 ### Core Endpoints Implemented
 
-| Method  | Endpoint                      | Access        | Description                                     |
-| ------- | ----------------------------- | ------------- | ----------------------------------------------- |
-| `GET`   | `/api/v1/health`              | Public        | Service health status and uptime                |
-| `POST`  | `/api/v1/auth/register`       | Public        | Register new user account with Argon2id         |
-| `POST`  | `/api/v1/auth/login`          | Public        | Authenticate user, receive JWT & refresh cookie |
-| `POST`  | `/api/v1/auth/refresh`        | Cookie        | Rotate refresh token with reuse detection       |
-| `POST`  | `/api/v1/auth/logout`         | Bearer        | Revoke active session via Redis and DB          |
-| `POST`  | `/api/v1/auth/logout-all`     | Bearer        | Revoke all active sessions for current user     |
-| `GET`   | `/api/v1/auth/me`             | Bearer        | Get authenticated user profile                  |
-| `POST`  | `/api/v1/orgs`                | Bearer        | Atomically create org with 4 system roles       |
-| `GET`   | `/api/v1/orgs`                | Bearer        | List organizations user belongs to              |
-| `GET`   | `/api/v1/orgs/:orgId`         | Bearer        | Get organization details (member-only)          |
-| `PATCH` | `/api/v1/orgs/:orgId`         | `org:update`  | Update organization details                     |
-| `GET`   | `/api/v1/orgs/:orgId/members` | `member:read` | Cursor-paginated members listing                |
-| `GET`   | `/api/v1/permissions`         | Bearer        | Global permissions catalog                      |
+| Method   | Endpoint                                   | Access               | Description                                               |
+| -------- | ------------------------------------------ | -------------------- | --------------------------------------------------------- |
+| `GET`    | `/api/v1/health`                           | Public               | Service health status and uptime                          |
+| `POST`   | `/api/v1/auth/register`                    | Public               | Register new user account with Argon2id                   |
+| `POST`   | `/api/v1/auth/login`                       | Public               | Authenticate user, receive JWT & refresh cookie           |
+| `POST`   | `/api/v1/auth/refresh`                     | Cookie               | Rotate refresh token with reuse detection                 |
+| `POST`   | `/api/v1/auth/logout`                      | Bearer               | Revoke active session via Redis and DB                    |
+| `POST`   | `/api/v1/auth/logout-all`                  | Bearer               | Revoke all active sessions for current user               |
+| `GET`    | `/api/v1/auth/me`                          | Bearer               | Get authenticated user profile                            |
+| `POST`   | `/api/v1/orgs`                             | Bearer               | Atomically create org with 4 system roles                 |
+| `GET`    | `/api/v1/orgs`                             | Bearer               | List organizations user belongs to                        |
+| `GET`    | `/api/v1/orgs/:orgId`                      | Bearer               | Get organization details (member-only)                    |
+| `PATCH`  | `/api/v1/orgs/:orgId`                      | `org:update`         | Update organization details                               |
+| `GET`    | `/api/v1/orgs/:orgId/members`              | `member:read`        | Cursor-paginated members listing                          |
+| `PATCH`  | `/api/v1/orgs/:orgId/members/:userId/role` | `member:role.update` | Update member role (hierarchy + last-owner protected)     |
+| `DELETE` | `/api/v1/orgs/:orgId/members/:userId`      | `member:remove`      | Remove member from org (hierarchy + last-owner protected) |
+| `GET`    | `/api/v1/orgs/:orgId/roles`                | `role:read`          | List system and custom roles with permissions             |
+| `POST`   | `/api/v1/orgs/:orgId/roles`                | `role:manage`        | Create custom role (strictly lower priority)              |
+| `PATCH`  | `/api/v1/orgs/:orgId/roles/:roleId`        | `role:manage`        | Update custom role (system roles immutable)               |
+| `DELETE` | `/api/v1/orgs/:orgId/roles/:roleId`        | `role:manage`        | Delete custom role (cannot delete if in use)              |
+| `GET`    | `/api/v1/permissions`                      | Bearer               | Global permissions catalog                                |
 
 ---
 
@@ -143,7 +149,7 @@ npm run build
 - [x] **Day 1: Foundation** — Tooling, Docker Compose, Zod env validation, Express 5 skeleton, central error handling, health endpoint.
 - [x] **Day 2: Data + Auth Core** — Full Prisma schema, PostgreSQL 16 migration, permission catalog seed, Argon2id registration, login with session tracking, account lockout, OpenAPI setup.
 - [x] **Day 3: Refresh, Orgs, RBAC Base & CI** — Refresh token rotation with family reuse detection, logout, logout-all, atomic organization creation with system roles, org-scoped RBAC middleware, members listing with cursor pagination, GitHub Actions CI workflow. _(Snapshot v0.1.0)_
-- [ ] **Day 4: RBAC Deep** — Custom role CRUD, member role modification, last-owner protection.
+- [x] **Day 4: RBAC Deep** — Custom role CRUD with privilege escalation prevention, member role modification, member removal, hierarchy enforcement, and row locking for last-owner protection.
 - [ ] **Day 5: Invitations & Audit Logs** — Hashed invitation links, atomic acceptance, transactional append-only audit trail.
 - [ ] **Day 6: Sessions & Rate Limiting** — Session management, Redis distributed rate limiters with headers.
 - [ ] **Day 7: Production Deploy v1** — Multi-stage Dockerfile, Railway deployment, smoke tests.

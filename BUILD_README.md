@@ -541,7 +541,7 @@ Total: **33 commits** over 14 days.
 | 1 | 2026-10-06 | 3 (C1–C3) | Local passed | Foundation complete: TypeScript, tooling, docker-compose, env validation, express skeleton, health & error handling. |
 | 2 | 2026-10-07 | 3 (C4–C6) | Local passed | Data model & Auth core: Prisma schema, migration, seed, registration with argon2id, login, session storage, lockout, JWT, Swagger. |
 | 3 | 2026-10-08 | 4 (C7–C10) | Local passed | Resume-ready snapshot (v0.1.0): refresh rotation, reuse detection, logout, orgs transaction, RBAC middleware, members listing, GitHub Actions CI, public README. |
-| 4 | | | | |
+| 4 | 2026-10-09 | 2 (C11–C12) | Local passed | RBAC deep: custom role CRUD, privilege escalation checks, member role updates & removal with strict hierarchy, last-owner protection, row locking concurrency safety. |
 | 5 | | | | |
 | 6 | | | | |
 | 7 | | | | |

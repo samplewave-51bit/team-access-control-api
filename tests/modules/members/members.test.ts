@@ -215,4 +215,303 @@ describe('RBAC & Members Listing', () => {
       }
     });
   });
+
+  describe('PATCH /api/v1/orgs/:orgId/members/:userId/role (Hierarchy & Last-Owner Rules)', () => {
+    it('should allow owner to update an admin role to member', async () => {
+      const { orgId, owner, admin } = await setupOrgWithFourRoles();
+      const roles = await testPrisma.role.findMany({ where: { orgId } });
+      const memberRole = roles.find((r) => r.name === 'member')!;
+
+      const res = await request(app)
+        .patch(`/api/v1/orgs/${orgId}/members/${admin.user.id}/role`)
+        .set('Authorization', `Bearer ${owner.token}`)
+        .send({ roleId: memberRole.id });
+
+      expect(res.status).toBe(200);
+      expect(res.body.member.role.name).toBe('member');
+
+      const updated = await testPrisma.membership.findUnique({
+        where: { userId_orgId: { userId: admin.user.id, orgId } },
+        include: { role: true },
+      });
+      expect(updated!.role.name).toBe('member');
+    });
+
+    it('should allow admin to change member role to viewer (priority strictly lower)', async () => {
+      const { orgId, admin, member } = await setupOrgWithFourRoles();
+      const roles = await testPrisma.role.findMany({ where: { orgId } });
+      const viewerRole = roles.find((r) => r.name === 'viewer')!;
+
+      const res = await request(app)
+        .patch(`/api/v1/orgs/${orgId}/members/${member.user.id}/role`)
+        .set('Authorization', `Bearer ${admin.token}`)
+        .send({ roleId: viewerRole.id });
+
+      expect(res.status).toBe(200);
+      expect(res.body.member.role.name).toBe('viewer');
+    });
+
+    it('should reject admin attempting to modify another admin role (equal priority)', async () => {
+      const { orgId, admin } = await setupOrgWithFourRoles();
+      const roles = await testPrisma.role.findMany({ where: { orgId } });
+      const viewerRole = roles.find((r) => r.name === 'viewer')!;
+      const adminRole = roles.find((r) => r.name === 'admin')!;
+
+      const secondAdmin = await registerAndLogin('admin2@test.com', 'Admin 2');
+      await testPrisma.membership.create({
+        data: {
+          userId: secondAdmin.user.id,
+          orgId,
+          roleId: adminRole.id,
+          status: 'ACTIVE',
+        },
+      });
+
+      const res = await request(app)
+        .patch(`/api/v1/orgs/${orgId}/members/${secondAdmin.user.id}/role`)
+        .set('Authorization', `Bearer ${admin.token}`)
+        .send({ roleId: viewerRole.id });
+
+      expect(res.status).toBe(403);
+      expect(res.body.error.message).toContain(
+        'Cannot modify the role of a member with equal or higher priority',
+      );
+    });
+
+    it('should reject admin attempting to modify owner role (higher priority)', async () => {
+      const { orgId, admin, owner } = await setupOrgWithFourRoles();
+      const roles = await testPrisma.role.findMany({ where: { orgId } });
+      const viewerRole = roles.find((r) => r.name === 'viewer')!;
+
+      const res = await request(app)
+        .patch(`/api/v1/orgs/${orgId}/members/${owner.user.id}/role`)
+        .set('Authorization', `Bearer ${admin.token}`)
+        .send({ roleId: viewerRole.id });
+
+      expect(res.status).toBe(403);
+      expect(res.body.error.message).toContain(
+        'Cannot modify the role of a member with equal or higher priority',
+      );
+    });
+
+    it('should reject owner attempting to modify another owner role (equal priority)', async () => {
+      const { orgId, owner } = await setupOrgWithFourRoles();
+      const roles = await testPrisma.role.findMany({ where: { orgId } });
+      const ownerRole = roles.find((r) => r.name === 'owner')!;
+      const viewerRole = roles.find((r) => r.name === 'viewer')!;
+
+      const secondOwner = await registerAndLogin('owner2@test.com', 'Owner 2');
+      await testPrisma.membership.create({
+        data: {
+          userId: secondOwner.user.id,
+          orgId,
+          roleId: ownerRole.id,
+          status: 'ACTIVE',
+        },
+      });
+
+      const res = await request(app)
+        .patch(`/api/v1/orgs/${orgId}/members/${secondOwner.user.id}/role`)
+        .set('Authorization', `Bearer ${owner.token}`)
+        .send({ roleId: viewerRole.id });
+
+      expect(res.status).toBe(403);
+      expect(res.body.error.message).toContain(
+        'Cannot modify the role of a member with equal or higher priority',
+      );
+    });
+
+    it('should reject assigning owner role (§3 Rule 3: assigning owner is NOT allowed)', async () => {
+      const { orgId, owner, member } = await setupOrgWithFourRoles();
+      const roles = await testPrisma.role.findMany({ where: { orgId } });
+      const ownerRole = roles.find((r) => r.name === 'owner')!;
+
+      const res = await request(app)
+        .patch(`/api/v1/orgs/${orgId}/members/${member.user.id}/role`)
+        .set('Authorization', `Bearer ${owner.token}`)
+        .send({ roleId: ownerRole.id });
+
+      expect(res.status).toBe(403);
+      expect(res.body.error.message).toContain(
+        'Cannot assign owner role; owner assignment is not permitted',
+      );
+    });
+
+    it('should reject assigning a role with priority higher than caller own priority', async () => {
+      const { orgId, owner, admin, member } = await setupOrgWithFourRoles();
+
+      // Create custom role with priority 85 (higher than admin priority 80)
+      const highRoleRes = await request(app)
+        .post(`/api/v1/orgs/${orgId}/roles`)
+        .set('Authorization', `Bearer ${owner.token}`)
+        .send({
+          name: 'director',
+          priority: 85,
+          permissions: ['member:read', 'role:read'],
+        });
+      const highRoleId = highRoleRes.body.role.id;
+
+      // Admin (priority 80) tries to assign highRole (priority 85) to member
+      const res = await request(app)
+        .patch(`/api/v1/orgs/${orgId}/members/${member.user.id}/role`)
+        .set('Authorization', `Bearer ${admin.token}`)
+        .send({ roleId: highRoleId });
+
+      expect(res.status).toBe(403);
+      expect(res.body.error.message).toContain(
+        'Cannot assign a role with priority higher than your own',
+      );
+    });
+
+    it('should reject demoting the last owner of the organization (§3 Rule 4)', async () => {
+      const { orgId, owner } = await setupOrgWithFourRoles();
+      const roles = await testPrisma.role.findMany({ where: { orgId } });
+      const memberRole = roles.find((r) => r.name === 'member')!;
+
+      // Owner attempts to demote themselves
+      const res = await request(app)
+        .patch(`/api/v1/orgs/${orgId}/members/${owner.user.id}/role`)
+        .set('Authorization', `Bearer ${owner.token}`)
+        .send({ roleId: memberRole.id });
+
+      expect(res.status).toBe(403);
+    });
+
+    it('should return 404 if member does not exist in the organization', async () => {
+      const { orgId, owner } = await setupOrgWithFourRoles();
+      const roles = await testPrisma.role.findMany({ where: { orgId } });
+      const memberRole = roles.find((r) => r.name === 'member')!;
+
+      const res = await request(app)
+        .patch(`/api/v1/orgs/${orgId}/members/123e4567-e89b-12d3-a456-426614174999/role`)
+        .set('Authorization', `Bearer ${owner.token}`)
+        .send({ roleId: memberRole.id });
+
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe('NOT_FOUND');
+    });
+  });
+
+  describe('DELETE /api/v1/orgs/:orgId/members/:userId (Member Removal & Last-Owner Protection)', () => {
+    it('should allow owner to remove an admin from the organization', async () => {
+      const { orgId, owner, admin } = await setupOrgWithFourRoles();
+
+      const res = await request(app)
+        .delete(`/api/v1/orgs/${orgId}/members/${admin.user.id}`)
+        .set('Authorization', `Bearer ${owner.token}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.message).toContain('Member removed successfully');
+
+      const membership = await testPrisma.membership.findUnique({
+        where: { userId_orgId: { userId: admin.user.id, orgId } },
+      });
+      expect(membership).toBeNull();
+    });
+
+    it('should allow admin to remove a member (priority strictly lower)', async () => {
+      const { orgId, admin, member } = await setupOrgWithFourRoles();
+
+      const res = await request(app)
+        .delete(`/api/v1/orgs/${orgId}/members/${member.user.id}`)
+        .set('Authorization', `Bearer ${admin.token}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.message).toContain('Member removed successfully');
+    });
+
+    it('should reject admin trying to remove another admin (equal priority)', async () => {
+      const { orgId, admin } = await setupOrgWithFourRoles();
+      const roles = await testPrisma.role.findMany({ where: { orgId } });
+      const adminRole = roles.find((r) => r.name === 'admin')!;
+
+      const secondAdmin = await registerAndLogin('admin_two@test.com', 'Admin Two');
+      await testPrisma.membership.create({
+        data: {
+          userId: secondAdmin.user.id,
+          orgId,
+          roleId: adminRole.id,
+          status: 'ACTIVE',
+        },
+      });
+
+      const res = await request(app)
+        .delete(`/api/v1/orgs/${orgId}/members/${secondAdmin.user.id}`)
+        .set('Authorization', `Bearer ${admin.token}`);
+
+      expect(res.status).toBe(403);
+      expect(res.body.error.message).toContain(
+        'Cannot remove a member with equal or higher priority',
+      );
+    });
+
+    it('should reject admin trying to remove owner (higher priority)', async () => {
+      const { orgId, admin, owner } = await setupOrgWithFourRoles();
+
+      const res = await request(app)
+        .delete(`/api/v1/orgs/${orgId}/members/${owner.user.id}`)
+        .set('Authorization', `Bearer ${admin.token}`);
+
+      expect(res.status).toBe(403);
+      expect(res.body.error.message).toContain(
+        'Cannot remove a member with equal or higher priority',
+      );
+    });
+
+    it('should reject removing the last owner of the organization (§3 Rule 4)', async () => {
+      const { orgId, owner } = await setupOrgWithFourRoles();
+
+      const res = await request(app)
+        .delete(`/api/v1/orgs/${orgId}/members/${owner.user.id}`)
+        .set('Authorization', `Bearer ${owner.token}`);
+
+      expect(res.status).toBe(403);
+      expect(res.body.error.message).toContain('Cannot remove the last owner of the organization');
+    });
+
+    it('should return 404 for removing a non-existent member', async () => {
+      const { orgId, owner } = await setupOrgWithFourRoles();
+
+      const res = await request(app)
+        .delete(`/api/v1/orgs/${orgId}/members/123e4567-e89b-12d3-a456-426614174999`)
+        .set('Authorization', `Bearer ${owner.token}`);
+
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe('NOT_FOUND');
+    });
+  });
+
+  describe('Concurrent Demotion & Last Owner Race Protection', () => {
+    it('should preserve last-owner invariant under concurrent demotion attempts', async () => {
+      const { orgId, owner } = await setupOrgWithFourRoles();
+      const roles = await testPrisma.role.findMany({ where: { orgId } });
+      const memberRole = roles.find((r) => r.name === 'member')!;
+
+      // Execute concurrent demotion attempts on the last owner
+      const results = await Promise.all([
+        request(app)
+          .patch(`/api/v1/orgs/${orgId}/members/${owner.user.id}/role`)
+          .set('Authorization', `Bearer ${owner.token}`)
+          .send({ roleId: memberRole.id }),
+        request(app)
+          .patch(`/api/v1/orgs/${orgId}/members/${owner.user.id}/role`)
+          .set('Authorization', `Bearer ${owner.token}`)
+          .send({ roleId: memberRole.id }),
+      ]);
+
+      // Both must be rejected; owner must remain owner
+      for (const res of results) {
+        expect(res.status).toBe(403);
+      }
+
+      const activeOwners = await testPrisma.membership.findMany({
+        where: {
+          orgId,
+          role: { name: 'owner' },
+          status: 'ACTIVE',
+        },
+      });
+      expect(activeOwners).toHaveLength(1);
+    });
+  });
 });
