@@ -4,10 +4,13 @@ import { requirePermission } from '../../middleware/requirePermission';
 import { validate } from '../../middleware/validate';
 import { membersController } from '../members/members.controller';
 import { listMembersSchema } from '../members/members.schemas';
+import { rolesRouter } from '../roles/roles.routes';
 import { orgsController } from './orgs.controller';
 import { createOrgSchema, getOrgSchema, updateOrgSchema } from './orgs.schemas';
 
 export const orgsRouter = Router();
+
+orgsRouter.use('/:orgId/roles', rolesRouter);
 
 orgsRouter.post('/', authenticate, validate(createOrgSchema), (req, res, next) => {
   orgsController.create(req, res).catch(next);
