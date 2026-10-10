@@ -1,3 +1,4 @@
+import { recordAudit } from '../../lib/audit';
 import { ForbiddenError, NotFoundError } from '../../lib/errors';
 import { prisma } from '../../lib/prisma';
 import { MembershipWithRoleAndPermissions } from '../../middleware/requirePermission';
@@ -115,6 +116,20 @@ export class MembersService {
         },
       });
 
+      await recordAudit(tx, {
+        orgId,
+        actorId: caller.userId,
+        action: 'member.role_update',
+        targetType: 'Membership',
+        targetId: updated.id,
+        metadata: {
+          targetUserId,
+          oldRoleId: targetMember.roleId,
+          newRoleId: newRole.id,
+          newRoleName: newRole.name,
+        },
+      });
+
       return {
         member: {
           id: updated.id,
@@ -174,6 +189,19 @@ export class MembersService {
 
       await tx.membership.delete({
         where: { id: targetMember.id },
+      });
+
+      await recordAudit(tx, {
+        orgId,
+        actorId: caller.userId,
+        action: 'member.remove',
+        targetType: 'Membership',
+        targetId: targetMember.id,
+        metadata: {
+          targetUserId,
+          roleId: targetMember.roleId,
+          roleName: targetMember.role.name,
+        },
       });
 
       return {

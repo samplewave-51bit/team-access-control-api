@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { authenticate } from '../../middleware/authenticate';
 import { requirePermission } from '../../middleware/requirePermission';
 import { validate } from '../../middleware/validate';
+import { auditRouter } from '../audit/audit.routes';
+import { orgInvitationsRouter } from '../invitations/invitations.routes';
 import { membersRouter } from '../members/members.routes';
 import { rolesRouter } from '../roles/roles.routes';
 import { orgsController } from './orgs.controller';
@@ -11,6 +13,8 @@ export const orgsRouter = Router();
 
 orgsRouter.use('/:orgId/roles', rolesRouter);
 orgsRouter.use('/:orgId/members', membersRouter);
+orgsRouter.use('/:orgId/invitations', orgInvitationsRouter);
+orgsRouter.use('/:orgId/audit-logs', auditRouter);
 
 orgsRouter.post('/', authenticate, validate(createOrgSchema), (req, res, next) => {
   orgsController.create(req, res).catch(next);

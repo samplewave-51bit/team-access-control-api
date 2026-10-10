@@ -1,3 +1,4 @@
+import { recordAudit } from '../../lib/audit';
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '../../lib/errors';
 import { prisma } from '../../lib/prisma';
 import { MembershipWithRoleAndPermissions } from '../../middleware/requirePermission';
@@ -96,6 +97,19 @@ export class RolesService {
           })),
         });
       }
+
+      await recordAudit(tx, {
+        orgId,
+        actorId: caller.userId,
+        action: 'role.create',
+        targetType: 'Role',
+        targetId: role.id,
+        metadata: {
+          name: role.name,
+          priority: role.priority,
+          permissions: input.permissions,
+        },
+      });
 
       return role;
     });
@@ -212,6 +226,19 @@ export class RolesService {
           });
         }
       }
+
+      await recordAudit(tx, {
+        orgId,
+        actorId: caller.userId,
+        action: 'role.update',
+        targetType: 'Role',
+        targetId: roleId,
+        metadata: {
+          name: input.name,
+          priority: input.priority,
+          permissions: input.permissions,
+        },
+      });
     });
 
     const updated = await prisma.role.findUniqueOrThrow({
@@ -269,8 +296,21 @@ export class RolesService {
       throw new ConflictError('Cannot delete a role that currently has members');
     }
 
-    await prisma.role.delete({
-      where: { id: roleId },
+    await prisma.$transaction(async (tx) => {
+      await tx.role.delete({
+        where: { id: roleId },
+      });
+
+      await recordAudit(tx, {
+        orgId,
+        actorId: caller.userId,
+        action: 'role.delete',
+        targetType: 'Role',
+        targetId: roleId,
+        metadata: {
+          name: role.name,
+        },
+      });
     });
 
     return {
