@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto';
+import { recordAudit } from '../../lib/audit';
 import { ConflictError, UnauthorizedError } from '../../lib/errors';
 import { hashPassword, verifyPassword } from '../../lib/hashing';
 import { prisma } from '../../lib/prisma';
@@ -46,11 +47,29 @@ export class AuthService {
     });
 
     if (!user) {
+      await recordAudit(prisma, {
+        orgId: null,
+        actorId: null,
+        action: 'auth.login_failure',
+        targetType: 'User',
+        targetId: null,
+        metadata: { email: input.email, reason: 'user_not_found' },
+        ip: meta.ip,
+      });
       throw new UnauthorizedError('Invalid email or password');
     }
 
     // Check account lockout
     if (user.lockedUntil && user.lockedUntil > new Date()) {
+      await recordAudit(prisma, {
+        orgId: null,
+        actorId: user.id,
+        action: 'auth.login_failure',
+        targetType: 'User',
+        targetId: user.id,
+        metadata: { email: input.email, reason: 'account_locked' },
+        ip: meta.ip,
+      });
       throw new UnauthorizedError('Account is temporarily locked. Please try again later.');
     }
 
@@ -67,6 +86,16 @@ export class AuthService {
           failedLoginCount: failedCount,
           lockedUntil,
         },
+      });
+
+      await recordAudit(prisma, {
+        orgId: null,
+        actorId: user.id,
+        action: 'auth.login_failure',
+        targetType: 'User',
+        targetId: user.id,
+        metadata: { email: input.email, reason: 'invalid_password' },
+        ip: meta.ip,
       });
 
       throw new UnauthorizedError('Invalid email or password');
@@ -101,6 +130,16 @@ export class AuthService {
     });
 
     const accessToken = generateAccessToken(user.id, session.id);
+
+    await recordAudit(prisma, {
+      orgId: null,
+      actorId: user.id,
+      action: 'auth.login_success',
+      targetType: 'User',
+      targetId: user.id,
+      metadata: { email: user.email },
+      ip: meta.ip,
+    });
 
     return {
       user: {
@@ -223,6 +262,15 @@ export class AuthService {
     for (const session of activeSessions) {
       await revokeSessionId(session.id);
     }
+
+    await recordAudit(prisma, {
+      orgId: null,
+      actorId: userId,
+      action: 'auth.logout_all',
+      targetType: 'User',
+      targetId: userId,
+      metadata: { revokedCount: activeSessions.length },
+    });
   }
 }
 

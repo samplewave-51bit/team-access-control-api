@@ -120,6 +120,11 @@ Once the server is running, explore the interactive Swagger documentation:
 | `POST`   | `/api/v1/orgs/:orgId/roles`                | `role:manage`        | Create custom role (strictly lower priority)              |
 | `PATCH`  | `/api/v1/orgs/:orgId/roles/:roleId`        | `role:manage`        | Update custom role (system roles immutable)               |
 | `DELETE` | `/api/v1/orgs/:orgId/roles/:roleId`        | `role:manage`        | Delete custom role (cannot delete if in use)              |
+| `POST`   | `/api/v1/orgs/:orgId/invitations`         | `member:invite`      | Create organization invitation with secure 32-byte token  |
+| `GET`    | `/api/v1/orgs/:orgId/invitations`         | `member:invite`      | List organization invitations with pagination and status  |
+| `DELETE` | `/api/v1/orgs/:orgId/invitations/:id`      | `member:invite`      | Revoke organization invitation                            |
+| `POST`   | `/api/v1/invitations/accept`               | Bearer               | Accept invitation and atomically join organization        |
+| `GET`    | `/api/v1/orgs/:orgId/audit-logs`           | `audit:read`         | List append-only organization audit logs with filtering   |
 | `GET`    | `/api/v1/permissions`                      | Bearer               | Global permissions catalog                                |
 
 ---
@@ -150,7 +155,7 @@ npm run build
 - [x] **Day 2: Data + Auth Core** — Full Prisma schema, PostgreSQL 16 migration, permission catalog seed, Argon2id registration, login with session tracking, account lockout, OpenAPI setup.
 - [x] **Day 3: Refresh, Orgs, RBAC Base & CI** — Refresh token rotation with family reuse detection, logout, logout-all, atomic organization creation with system roles, org-scoped RBAC middleware, members listing with cursor pagination, GitHub Actions CI workflow. _(Snapshot v0.1.0)_
 - [x] **Day 4: RBAC Deep** — Custom role CRUD with privilege escalation prevention, member role modification, member removal, hierarchy enforcement, and row locking for last-owner protection.
-- [ ] **Day 5: Invitations & Audit Logs** — Hashed invitation links, atomic acceptance, transactional append-only audit trail.
+- [x] **Day 5: Invitations & Audit Logs** — Hashed invitation links, atomic acceptance, transactional append-only audit trail.
 - [ ] **Day 6: Sessions & Rate Limiting** — Session management, Redis distributed rate limiters with headers.
 - [ ] **Day 7: Production Deploy v1** — Multi-stage Dockerfile, Railway deployment, smoke tests.
 - [ ] **Day 8: Storage & Secure Uploads** — S3 client, MinIO integration, multipart file validation, magic-byte checks.

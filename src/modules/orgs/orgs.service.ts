@@ -1,4 +1,5 @@
 import { Prisma } from '@prisma/client';
+import { recordAudit } from '../../lib/audit';
 import { ForbiddenError, NotFoundError } from '../../lib/errors';
 import { prisma } from '../../lib/prisma';
 import { CreateOrgInput, UpdateOrgInput } from './orgs.schemas';
@@ -151,6 +152,16 @@ export class OrgsService {
         },
       });
 
+      // Record audit log inside transaction
+      await recordAudit(tx, {
+        orgId: org.id,
+        actorId: userId,
+        action: 'org.create',
+        targetType: 'Organization',
+        targetId: org.id,
+        metadata: { name: org.name, slug: org.slug },
+      });
+
       // Optional test hook to simulate failure and test rollback
       if (transactionHook) {
         await transactionHook(tx);
@@ -250,19 +261,30 @@ export class OrgsService {
       throw new ForbiddenError('Insufficient permissions to update organization');
     }
 
-    const updatedOrg = await prisma.organization.update({
-      where: { id: orgId },
-      data: { name: input.name },
-    });
+    return await prisma.$transaction(async (tx) => {
+      const updatedOrg = await tx.organization.update({
+        where: { id: orgId },
+        data: { name: input.name },
+      });
 
-    return {
-      id: updatedOrg.id,
-      name: updatedOrg.name,
-      slug: updatedOrg.slug,
-      createdById: updatedOrg.createdById,
-      createdAt: updatedOrg.createdAt,
-      updatedAt: updatedOrg.updatedAt,
-    };
+      await recordAudit(tx, {
+        orgId,
+        actorId: userId,
+        action: 'org.update',
+        targetType: 'Organization',
+        targetId: orgId,
+        metadata: { name: input.name },
+      });
+
+      return {
+        id: updatedOrg.id,
+        name: updatedOrg.name,
+        slug: updatedOrg.slug,
+        createdById: updatedOrg.createdById,
+        createdAt: updatedOrg.createdAt,
+        updatedAt: updatedOrg.updatedAt,
+      };
+    });
   }
 }
 

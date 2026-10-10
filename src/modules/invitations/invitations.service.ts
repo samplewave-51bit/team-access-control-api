@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { env } from '../../config/env';
+import { recordAudit } from '../../lib/audit';
 import { ConflictError, ForbiddenError, NotFoundError } from '../../lib/errors';
 import { prisma } from '../../lib/prisma';
 import { MembershipWithRoleAndPermissions } from '../../middleware/requirePermission';
@@ -74,23 +75,40 @@ export class InvitationsService {
     const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days per §10
 
-    const invitation = await prisma.invitation.create({
-      data: {
+    const invitation = await prisma.$transaction(async (tx) => {
+      const inv = await tx.invitation.create({
+        data: {
+          orgId,
+          email: input.email,
+          roleId: input.roleId,
+          tokenHash,
+          expiresAt,
+          invitedById: callerUserId,
+        },
+        include: {
+          role: {
+            select: { id: true, name: true, priority: true, isSystem: true },
+          },
+          invitedBy: {
+            select: { id: true, email: true, name: true },
+          },
+        },
+      });
+
+      await recordAudit(tx, {
         orgId,
-        email: input.email,
-        roleId: input.roleId,
-        tokenHash,
-        expiresAt,
-        invitedById: callerUserId,
-      },
-      include: {
-        role: {
-          select: { id: true, name: true, priority: true, isSystem: true },
+        actorId: callerUserId,
+        action: 'invitation.create',
+        targetType: 'Invitation',
+        targetId: inv.id,
+        metadata: {
+          email: input.email,
+          roleId: input.roleId,
+          roleName: inv.role.name,
         },
-        invitedBy: {
-          select: { id: true, email: true, name: true },
-        },
-      },
+      });
+
+      return inv;
     });
 
     const inviteUrl = `${env.APP_URL}/accept-invite?token=${rawToken}`;
@@ -200,9 +218,23 @@ export class InvitationsService {
       );
     }
 
-    await prisma.invitation.update({
-      where: { id: invitationId },
-      data: { revokedAt: new Date() },
+    await prisma.$transaction(async (tx) => {
+      await tx.invitation.update({
+        where: { id: invitationId },
+        data: { revokedAt: new Date() },
+      });
+
+      await recordAudit(tx, {
+        orgId,
+        actorId: caller.userId,
+        action: 'invitation.revoke',
+        targetType: 'Invitation',
+        targetId: invitationId,
+        metadata: {
+          email: invitation.email,
+          roleId: invitation.roleId,
+        },
+      });
     });
 
     return {
@@ -269,6 +301,18 @@ export class InvitationsService {
           orgId: invitation.orgId,
           roleId: invitation.roleId,
           status: 'ACTIVE',
+        },
+      });
+
+      await recordAudit(tx, {
+        orgId: invitation.orgId,
+        actorId: userId,
+        action: 'invitation.accept',
+        targetType: 'Invitation',
+        targetId: invitation.id,
+        metadata: {
+          email: invitation.email,
+          roleId: invitation.roleId,
         },
       });
 
