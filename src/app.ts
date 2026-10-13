@@ -11,6 +11,7 @@ import { healthRouter } from './modules/health/health.routes';
 import { invitationsRouter } from './modules/invitations/invitations.routes';
 import { orgsRouter } from './modules/orgs/orgs.routes';
 import { permissionsRouter } from './modules/permissions/permissions.routes';
+import { sessionsRouter } from './modules/sessions/sessions.routes';
 
 export function createApp(): Express {
   const app = express();
@@ -48,6 +49,7 @@ export function createApp(): Express {
   // API Routes
   app.use('/api/v1', healthRouter);
   app.use('/api/v1/auth', authRouter);
+  app.use('/api/v1/sessions', sessionsRouter);
   app.use('/api/v1/orgs', orgsRouter);
   app.use('/api/v1/invitations', invitationsRouter);
   app.use('/api/v1/permissions', permissionsRouter);

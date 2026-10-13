@@ -120,8 +120,8 @@ Once the server is running, explore the interactive Swagger documentation:
 | `POST`   | `/api/v1/orgs/:orgId/roles`                | `role:manage`        | Create custom role (strictly lower priority)              |
 | `PATCH`  | `/api/v1/orgs/:orgId/roles/:roleId`        | `role:manage`        | Update custom role (system roles immutable)               |
 | `DELETE` | `/api/v1/orgs/:orgId/roles/:roleId`        | `role:manage`        | Delete custom role (cannot delete if in use)              |
-| `POST`   | `/api/v1/orgs/:orgId/invitations`         | `member:invite`      | Create organization invitation with secure 32-byte token  |
-| `GET`    | `/api/v1/orgs/:orgId/invitations`         | `member:invite`      | List organization invitations with pagination and status  |
+| `POST`   | `/api/v1/orgs/:orgId/invitations`          | `member:invite`      | Create organization invitation with secure 32-byte token  |
+| `GET`    | `/api/v1/orgs/:orgId/invitations`          | `member:invite`      | List organization invitations with pagination and status  |
 | `DELETE` | `/api/v1/orgs/:orgId/invitations/:id`      | `member:invite`      | Revoke organization invitation                            |
 | `POST`   | `/api/v1/invitations/accept`               | Bearer               | Accept invitation and atomically join organization        |
 | `GET`    | `/api/v1/orgs/:orgId/audit-logs`           | `audit:read`         | List append-only organization audit logs with filtering   |

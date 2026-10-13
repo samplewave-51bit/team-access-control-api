@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { authenticate } from '../../middleware/authenticate';
 import { requirePermission } from '../../middleware/requirePermission';
 import { validate } from '../../middleware/validate';
+import { sessionsController } from '../sessions/sessions.controller';
+import { revokeMemberSessionsSchema } from '../sessions/sessions.schemas';
 import { membersController } from './members.controller';
 import { deleteMemberSchema, listMembersSchema, updateMemberRoleSchema } from './members.schemas';
 
@@ -34,5 +36,15 @@ membersRouter.delete(
   validate(deleteMemberSchema),
   (req, res, next) => {
     membersController.remove(req, res).catch(next);
+  },
+);
+
+membersRouter.post(
+  '/:userId/revoke-sessions',
+  authenticate,
+  requirePermission('session:revoke'),
+  validate(revokeMemberSessionsSchema),
+  (req, res, next) => {
+    sessionsController.revokeMember(req, res).catch(next);
   },
 );
