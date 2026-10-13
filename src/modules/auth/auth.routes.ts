@@ -1,18 +1,30 @@
 import { Router } from 'express';
+import { rateLimitConfigs } from '../../config/rateLimits';
 import { authenticate } from '../../middleware/authenticate';
+import { createRateLimiterMiddleware } from '../../middleware/rateLimit';
 import { validate } from '../../middleware/validate';
 import { authController } from './auth.controller';
 import { loginSchema, registerSchema } from './auth.schemas';
 
 export const authRouter = Router();
 
-authRouter.post('/register', validate(registerSchema), (req, res, next) => {
-  authController.register(req, res).catch(next);
-});
+authRouter.post(
+  '/register',
+  createRateLimiterMiddleware(rateLimitConfigs.register),
+  validate(registerSchema),
+  (req, res, next) => {
+    authController.register(req, res).catch(next);
+  },
+);
 
-authRouter.post('/login', validate(loginSchema), (req, res, next) => {
-  authController.login(req, res).catch(next);
-});
+authRouter.post(
+  '/login',
+  createRateLimiterMiddleware(rateLimitConfigs.login),
+  validate(loginSchema),
+  (req, res, next) => {
+    authController.login(req, res).catch(next);
+  },
+);
 
 authRouter.post('/refresh', (req, res, next) => {
   authController.refresh(req, res).catch(next);
