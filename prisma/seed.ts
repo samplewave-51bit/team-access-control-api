@@ -19,9 +19,9 @@ export const PERMISSION_CATALOG = [
   { key: 'file:delete:any', description: 'Delete any organization file' },
 ];
 
-export async function seedPermissions(): Promise<void> {
+export async function seedPermissions(client: PrismaClient = prisma): Promise<void> {
   for (const perm of PERMISSION_CATALOG) {
-    await prisma.permission.upsert({
+    await client.permission.upsert({
       where: { key: perm.key },
       update: { description: perm.description },
       create: {

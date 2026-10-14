@@ -10,6 +10,7 @@ jobs:
   test:
     name: Lint, Build & Test
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     services:
       postgres:
