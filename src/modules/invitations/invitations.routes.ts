@@ -1,5 +1,7 @@
 import { Router } from 'express';
+import { rateLimitConfigs } from '../../config/rateLimits';
 import { authenticate } from '../../middleware/authenticate';
+import { createRateLimiterMiddleware } from '../../middleware/rateLimit';
 import { requirePermission } from '../../middleware/requirePermission';
 import { validate } from '../../middleware/validate';
 import { invitationsController } from './invitations.controller';
@@ -17,6 +19,7 @@ orgInvitationsRouter.post(
   '/',
   authenticate,
   requirePermission('member:invite'),
+  createRateLimiterMiddleware(rateLimitConfigs.invitations),
   validate(createInvitationSchema),
   (req, res, next) => {
     invitationsController.create(req, res).catch(next);

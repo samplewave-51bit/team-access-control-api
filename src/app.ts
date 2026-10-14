@@ -2,18 +2,24 @@ import cookieParser from 'cookie-parser';
 import express, { Express, Request, Response } from 'express';
 import pinoHttp from 'pino-http';
 import swaggerUi from 'swagger-ui-express';
+import { rateLimitConfigs } from './config/rateLimits';
 import { getOpenApiDocumentation } from './docs/openapi';
 import { logger } from './lib/logger';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
+import { createRateLimiterMiddleware } from './middleware/rateLimit';
 import { requestIdMiddleware } from './middleware/requestId';
 import { authRouter } from './modules/auth/auth.routes';
 import { healthRouter } from './modules/health/health.routes';
 import { invitationsRouter } from './modules/invitations/invitations.routes';
 import { orgsRouter } from './modules/orgs/orgs.routes';
 import { permissionsRouter } from './modules/permissions/permissions.routes';
+import { sessionsRouter } from './modules/sessions/sessions.routes';
 
 export function createApp(): Express {
   const app = express();
+
+  // Trust proxy for real IPs behind reverse proxy (e.g. Railway, Cloudflare)
+  app.set('trust proxy', 1);
 
   // Basic security and parsing
   app.disable('x-powered-by');
@@ -47,7 +53,9 @@ export function createApp(): Express {
 
   // API Routes
   app.use('/api/v1', healthRouter);
+  app.use('/api/v1', createRateLimiterMiddleware(rateLimitConfigs.global));
   app.use('/api/v1/auth', authRouter);
+  app.use('/api/v1/sessions', sessionsRouter);
   app.use('/api/v1/orgs', orgsRouter);
   app.use('/api/v1/invitations', invitationsRouter);
   app.use('/api/v1/permissions', permissionsRouter);

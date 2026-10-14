@@ -5,6 +5,8 @@ module.exports = {
   roots: ['<rootDir>/tests'],
   testMatch: ['**/*.test.ts'],
   maxWorkers: 1,
+  forceExit: true,
+  detectOpenHandles: true,
   transform: {
     '^.+\\.tsx?$': [
       'ts-jest',

@@ -44,4 +44,18 @@ describe('Environment Configuration', () => {
     const invalidEnv = { ...validEnv, JWT_ACCESS_SECRET: 'short-secret' };
     expect(() => parseEnv(invalidEnv)).toThrow(/JWT_ACCESS_SECRET must be at least 32 characters/);
   });
+
+  it('should default COOKIE_SECURE to true in production when omitted', () => {
+    const prodEnv = { ...validEnv, NODE_ENV: 'production' };
+    delete (prodEnv as Record<string, unknown>).COOKIE_SECURE;
+    const parsed = parseEnv(prodEnv);
+    expect(parsed.COOKIE_SECURE).toBe(true);
+    expect(parsed.NODE_ENV).toBe('production');
+  });
+
+  it('should allow explicitly overriding COOKIE_SECURE to false in production if needed', () => {
+    const prodEnv = { ...validEnv, NODE_ENV: 'production', COOKIE_SECURE: 'false' };
+    const parsed = parseEnv(prodEnv);
+    expect(parsed.COOKIE_SECURE).toBe(false);
+  });
 });

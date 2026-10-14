@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { seedPermissions } from '../../prisma/seed';
+import { prisma as appPrisma } from '../../src/lib/prisma';
 import { disconnectRedis, getRedisClient } from '../../src/lib/redis';
 
 export const testPrisma = new PrismaClient();
@@ -21,7 +22,7 @@ export async function resetDatabase(): Promise<void> {
   `);
 
   // Ensure permission catalog exists
-  await seedPermissions();
+  await seedPermissions(testPrisma);
 
   // Flush Redis test DB
   try {
@@ -33,6 +34,9 @@ export async function resetDatabase(): Promise<void> {
 }
 
 export async function disconnectDatabase(): Promise<void> {
-  await testPrisma.$disconnect();
-  await disconnectRedis();
+  await Promise.allSettled([
+    testPrisma.$disconnect(),
+    appPrisma.$disconnect(),
+    disconnectRedis(),
+  ]);
 }

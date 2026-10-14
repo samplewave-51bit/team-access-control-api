@@ -1,5 +1,6 @@
 import request from 'supertest';
 import { app } from '../../src/app';
+import { disconnectDatabase } from '../helpers/db';
 
 describe('GET /api/v1/health', () => {
   it('should return 200 OK with health status and requestId header', async () => {
@@ -38,4 +39,8 @@ describe('404 Not Found Handler', () => {
     });
     expect(res.headers['x-request-id']).toBe(res.body.error.requestId);
   });
+});
+
+afterAll(async () => {
+  await disconnectDatabase();
 });
