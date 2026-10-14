@@ -544,7 +544,7 @@ Total: **33 commits** over 14 days.
 | 4 | 2026-10-09 | 2 (C11–C12) | Local passed | RBAC deep: custom role CRUD, privilege escalation checks, member role updates & removal with strict hierarchy, last-owner protection, row locking concurrency safety. |
 | 5 | 2026-10-10 | 2 (C13–C14) | Local passed | Invitations & Audit logs: secure 32-byte hashed invitation URLs, atomic accept/revoke, append-only transactional audit trail with filtering and cursor pagination. |
 | 6 | 2026-10-14 | 2 (C15–C16) | Local passed | Sessions & Rate limiting: session listing/revocation, instant Redis blocklist, admin member revocation with hierarchy checks, Redis-backed rate limiting with RateLimit and Retry-After headers. |
-| 7 | | | | |
+| 7 | 2026-10-14 | 2 (C17–C18) | Local passed | Deploy v1: multi-stage Dockerfile, Railway deployment config, pre-deploy release migration, smoke test script, production docs, tag v0.2.0. |
 | 8 | | | | |
 | 9 | | | | |
 | 10 | | | | |

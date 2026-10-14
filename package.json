@@ -1,6 +1,6 @@
 {
   "name": "team-access-control-api",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Production-style IAM-style SaaS backend with RBAC, session management, file safety, and audit logging",
   "main": "dist/server.js",
   "scripts": {

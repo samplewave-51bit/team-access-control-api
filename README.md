@@ -5,6 +5,7 @@
 [![TypeScript](https://img.shields.io/badge/typescript-5.x-blue.svg)](https://www.typescriptlang.org/)
 [![Express](https://img.shields.io/badge/express-5.x-lightgrey.svg)](https://expressjs.com/)
 [![Prisma](https://img.shields.io/badge/prisma-6.x-indigo.svg)](https://www.prisma.io/)
+[![Health Check](https://img.shields.io/badge/health-200%20OK-success.svg)](#deployment--production)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 A production-grade, multi-tenant **IAM-style SaaS backend API** built with Node.js 22 LTS, TypeScript, Express 5, PostgreSQL 16, and Redis 7.
@@ -152,6 +153,83 @@ npm run build
 
 ---
 
+## Deployment & Production
+
+The API is packaged as a lean, multi-stage Docker container based on `node:22-slim` with non-root security (`USER node`), automated health check, and pre-deploy migrations, configured for cloud deployment on platforms like [Railway](https://railway.app/).
+
+### Production Architecture
+
+- **Web Service:** Node.js Express 5 API running `npm run start:prod` (`node dist/server.js`)
+- **Database:** Managed PostgreSQL 16
+- **Cache & Rate Limiting:** Managed Redis 7
+- **Reverse Proxy / Ingress:** `trust proxy` enabled for real client IP resolution and HTTPS termination
+
+### Environment Variables
+
+Set the following environment variables in your deployment environment:
+
+```env
+NODE_ENV=production
+PORT=3000
+DATABASE_URL=postgresql://<user>:<password>@<host>:<port>/<dbname>
+REDIS_URL=redis://default:<password>@<host>:<port>
+JWT_ACCESS_SECRET=<at-least-32-chars-long-secret>
+ACCESS_TOKEN_TTL=15m
+REFRESH_TOKEN_TTL_DAYS=7
+COOKIE_SECURE=true
+CORS_ORIGINS=https://your-frontend.com
+S3_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com
+S3_REGION=auto
+S3_BUCKET=tac-files
+S3_ACCESS_KEY=<access-key>
+S3_SECRET_KEY=<secret-key>
+S3_FORCE_PATH_STYLE=false
+SMTP_HOST=smtp.mailgun.org
+SMTP_PORT=587
+SMTP_USER=<smtp-user>
+SMTP_PASS=<smtp-password>
+MAIL_FROM=no-reply@your-domain.com
+APP_URL=https://your-api.railway.app
+```
+
+### Pre-Deploy Migrations
+
+Database migrations execute before traffic routing via Railway's release pre-deploy command configured in `railway.json`:
+
+```bash
+npx prisma migrate deploy
+```
+
+_(Never run `prisma migrate dev` in production environments)._
+
+### Health Check & Live Endpoints
+
+- **Health Check Endpoint:** `GET /api/v1/health` — Returns `200 OK` with service status and process uptime.
+- **Swagger Documentation:** `GET /docs` — Interactive OpenAPI 3.0 documentation.
+- **OpenAPI Schema:** `GET /docs/openapi.json` — Raw OpenAPI 3.0 specification.
+
+### Automated Smoke Tests
+
+Validate full end-to-end functionality against any live or local environment with zero dependencies (`curl` + `node`):
+
+```bash
+# Against deployed Railway URL
+bash scripts/smoke.sh https://your-api.railway.app
+
+# Against local development server
+bash scripts/smoke.sh http://localhost:3000
+```
+
+The test verifies:
+
+1. Service health check (`GET /api/v1/health`)
+2. Account registration with Argon2id (`POST /api/v1/auth/register`)
+3. User login and JWT access token retrieval (`POST /api/v1/auth/login`)
+4. Organization creation with system roles (`POST /api/v1/orgs`)
+5. Member listing and owner authorization (`GET /api/v1/orgs/:orgId/members`)
+
+---
+
 ## Status & Roadmap
 
 - [x] **Day 1: Foundation** — Tooling, Docker Compose, Zod env validation, Express 5 skeleton, central error handling, health endpoint.
@@ -160,7 +238,7 @@ npm run build
 - [x] **Day 4: RBAC Deep** — Custom role CRUD with privilege escalation prevention, member role modification, member removal, hierarchy enforcement, and row locking for last-owner protection.
 - [x] **Day 5: Invitations & Audit Logs** — Hashed invitation links, atomic acceptance, transactional append-only audit trail.
 - [x] **Day 6: Sessions & Rate Limiting** — Session management, instant Redis revocation, admin member revocation with hierarchy, Redis-backed rate limiters (global, auth brute force, per-user, invitations).
-- [ ] **Day 7: Production Deploy v1** — Multi-stage Dockerfile, Railway deployment, smoke tests.
+- [x] **Day 7: Production Deploy v1** — Multi-stage Dockerfile, Railway deployment, smoke tests. _(Snapshot v0.2.0)_
 - [ ] **Day 8: Storage & Secure Uploads** — S3 client, MinIO integration, multipart file validation, magic-byte checks.
 - [ ] **Day 9: File Access & Signed URLs** — Scoped access (`:own` vs `:any`), 60s signed download URLs, per-org quotas.
 - [ ] **Day 10: Background Queues & Workers** — BullMQ worker process, transactional email, antivirus file scanner.
