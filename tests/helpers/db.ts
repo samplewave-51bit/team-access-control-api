@@ -34,9 +34,5 @@ export async function resetDatabase(): Promise<void> {
 }
 
 export async function disconnectDatabase(): Promise<void> {
-  await Promise.allSettled([
-    testPrisma.$disconnect(),
-    appPrisma.$disconnect(),
-    disconnectRedis(),
-  ]);
+  await Promise.allSettled([testPrisma.$disconnect(), appPrisma.$disconnect(), disconnectRedis()]);
 }
