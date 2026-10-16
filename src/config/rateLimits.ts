@@ -87,6 +87,12 @@ export const rateLimitConfigs = {
       return orgId || getClientIp(req);
     },
   },
+  upload: {
+    keyPrefix: 'rl:upload',
+    points: isTest ? 1000 : 10,
+    duration: 60,
+    keyGenerator: (req: Request) => req.user?.id || getClientIp(req),
+  },
 };
 
 export type RateLimiterResInfo = RateLimiterRes;

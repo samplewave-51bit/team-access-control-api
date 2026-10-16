@@ -545,7 +545,7 @@ Total: **33 commits** over 14 days.
 | 5 | 2026-10-10 | 2 (C13–C14) | Local passed | Invitations & Audit logs: secure 32-byte hashed invitation URLs, atomic accept/revoke, append-only transactional audit trail with filtering and cursor pagination. |
 | 6 | 2026-10-14 | 2 (C15–C16) | Local passed | Sessions & Rate limiting: session listing/revocation, instant Redis blocklist, admin member revocation with hierarchy checks, Redis-backed rate limiting with RateLimit and Retry-After headers. |
 | 7 | 2026-10-14 | 2 (C17–C18) | Local passed | Deploy v1: multi-stage Dockerfile, Railway deployment config, pre-deploy release migration, smoke test script, production docs, tag v0.2.0. |
-| 8 | | | | |
+| 8 | 2026-10-16 | 2 (C19–C20) | Local passed | Storage & Secure Uploads: S3-compatible storage provider with bucket bootstrap, pre-signed download URLs, secure multipart file uploads with magic-byte verification, double-extension & path traversal defenses, per-org quotas, transactional audit logs. |
 | 9 | | | | |
 | 10 | | | | |
 | 11 | | | | |

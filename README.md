@@ -126,6 +126,7 @@ Once the server is running, explore the interactive Swagger documentation:
 | `DELETE` | `/api/v1/orgs/:orgId/invitations/:id`                 | `member:invite`      | Revoke organization invitation                            |
 | `POST`   | `/api/v1/invitations/accept`                          | Bearer               | Accept invitation and atomically join organization        |
 | `GET`    | `/api/v1/orgs/:orgId/audit-logs`                      | `audit:read`         | List append-only organization audit logs with filtering   |
+| `POST`   | `/api/v1/orgs/:orgId/files`                           | `file:upload`        | Secure multipart upload (magic bytes, quota, S3)          |
 | `GET`    | `/api/v1/sessions`                                    | Bearer               | List active sessions for caller (with `isCurrent`)        |
 | `DELETE` | `/api/v1/sessions/:id`                                | Bearer               | Revoke caller's own session (DB + Redis blocklist)        |
 | `POST`   | `/api/v1/orgs/:orgId/members/:userId/revoke-sessions` | `session:revoke`     | Admin revoke of member sessions (hierarchy enforced)      |
@@ -239,7 +240,7 @@ The test verifies:
 - [x] **Day 5: Invitations & Audit Logs** — Hashed invitation links, atomic acceptance, transactional append-only audit trail.
 - [x] **Day 6: Sessions & Rate Limiting** — Session management, instant Redis revocation, admin member revocation with hierarchy, Redis-backed rate limiters (global, auth brute force, per-user, invitations).
 - [x] **Day 7: Production Deploy v1** — Multi-stage Dockerfile, Railway deployment, smoke tests. _(Snapshot v0.2.0)_
-- [ ] **Day 8: Storage & Secure Uploads** — S3 client, MinIO integration, multipart file validation, magic-byte checks.
+- [x] **Day 8: Storage & Secure Uploads** — S3-compatible storage provider (MinIO/R2), multipart upload with magic-byte validation, path traversal & double extension guards, transactional per-org quota, and audit logging.
 - [ ] **Day 9: File Access & Signed URLs** — Scoped access (`:own` vs `:any`), 60s signed download URLs, per-org quotas.
 - [ ] **Day 10: Background Queues & Workers** — BullMQ worker process, transactional email, antivirus file scanner.
 - [ ] **Day 11: Maintenance Jobs & Worker Deploy** — Scheduled session purge and file cleanup, worker deployment.

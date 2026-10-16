@@ -27,6 +27,26 @@ export function errorHandler(
     return;
   }
 
+  // Handle Multer upload errors
+  if (err.name === 'MulterError' || (err as { code?: string }).code === 'LIMIT_FILE_SIZE') {
+    const isOversize = (err as { code?: string }).code === 'LIMIT_FILE_SIZE';
+    const statusCode = isOversize ? 413 : 400;
+    const errorCode = isOversize ? 'PAYLOAD_TOO_LARGE' : 'VALIDATION_ERROR';
+    const message = isOversize
+      ? 'File size exceeds maximum allowed limit of 5 MB'
+      : err.message || 'File upload error';
+
+    res.status(statusCode).json({
+      error: {
+        code: errorCode,
+        message,
+        details: [],
+        requestId,
+      },
+    });
+    return;
+  }
+
   logger.error(
     {
       err,
